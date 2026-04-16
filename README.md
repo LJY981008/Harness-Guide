@@ -100,3 +100,4 @@ claude-setting/
 - **주간 GC schedule 시 배포 job 차단 필수**: `$CI_PIPELINE_SOURCE == "schedule"` 시 `when: never` prepend. 없으면 매주 자동 배포 사고.
 - **Discord webhook 실패는 `|| true`로 억제**: GC 본체 성공 여부와 알림 실패를 분리. 알림 실패로 GC 전체 실패 전파 금지.
 # Harness-Guide
+# Harness-Guide
