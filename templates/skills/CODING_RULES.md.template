@@ -1,0 +1,55 @@
+# 코딩 규칙
+
+> 코드 작성 시 반드시 지킬 규칙. 위반 시 PR 거부.
+
+## Import 규칙
+
+- ❌ wildcard import 금지 (`import foo.*`)
+- ❌ fully-qualified 사용 금지 (코드 본문에 `com.example.foo.Bar` 직접 적기)
+- ✅ 명시적 import만
+
+## Naming
+
+- 클래스: PascalCase
+- 메서드/변수: camelCase
+- 상수: UPPER_SNAKE_CASE
+- 패키지: lowercase
+- <프로젝트별 추가 컨벤션>
+
+## Entity / DTO 패턴
+
+```java
+// Entity 예시 (프로젝트 패턴 맞게 수정)
+@Entity
+@NoArgsConstructor(access = PROTECTED)
+@Getter
+public class FooEntity {
+    @Id @GeneratedValue
+    private Long id;
+    // setter 금지 — 비즈니스 메서드로 변경
+}
+```
+
+## 로깅 컨벤션
+
+```java
+log.info("[모듈][도메인][액션] 상태 - key={}, value={}", key, value);
+```
+- 문자열 연결(`+`) 금지
+- SLF4J placeholder 사용
+
+## 트랜잭션 / 외부 호출
+
+- 외부 HTTP 호출은 트랜잭션 밖에서
+- `@Transactional(propagation = NOT_SUPPORTED)` 활용
+
+## 테스트
+
+- 통합 테스트는 실제 DB 사용 (mock 금지)
+- 단위 테스트는 빠르게
+
+## 안티패턴
+
+### ❌ <안티패턴 1>
+**금지 이유**: <왜>
+**대신**: <어떻게>

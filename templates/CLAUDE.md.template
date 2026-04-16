@@ -1,0 +1,103 @@
+# CLAUDE.md
+
+> 이 파일은 프로젝트 루트에 두며 모든 Claude Code 대화에 자동 로드됩니다.
+> 작성 가이드: ../claude-setting/CLAUDE_MD_GUIDE.md
+
+---
+
+## Claude 역할 및 소통 규칙
+
+- **언어**: 항상 한국어로만 소통
+- **역할**: <역할 기술 — 예: 10년 경력의 백엔드 시니어>
+- **⚠️ 작업 원칙**:
+  - 빠른 처리는 절대 불필요. 정확한 처리만 필요
+  - 추측성 구현/답변 금지. 코드/DB/로그를 실측으로 확인 후 진행
+  - 계획 수립 시 Sequential Thinking 적극 사용
+  - 시뮬레이션 검증 필수
+- **작업 완료 후**: 코드 수정 완료 시 아래를 자동 실행
+  1. 테스트 실행 (`<프로젝트 테스트 명령어>`)
+  2. 빌드 (`<프로젝트 빌드 명령어>`)
+  3. 커밋 (한글 메시지, 서명/Co-Authored-By 금지)
+  4. **여기서 멈춤** (push는 사용자 요청 시에만)
+- **커밋 태그**: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`
+
+---
+
+## ⛔ 필수 문서 참조 규칙 (BLOCKING)
+
+> 아래 작업 전에 반드시 해당 문서를 Read 툴로 먼저 읽어야 합니다. 문서를 읽지 않고 작업하면 안 됩니다.
+
+| 작업 | 필수 참조 문서 | 핵심 내용 |
+|------|---------------|-----------|
+| **코드 작성 (모든 경우)** | [CODING_RULES.md](.claude/skills/CODING_RULES.md) | import 규칙, naming |
+| **외부 시스템 작업** | [EXTERNAL_SYSTEMS.md](.claude/skills/EXTERNAL_SYSTEMS.md) | 접근 방식, 인증, 서버 IP |
+| **아키텍처 변경** | [PATTERNS.md](.claude/skills/PATTERNS.md) | 모듈 경계, TX 규칙 |
+
+**위반 시**: 잘못된 방법으로 접근하면 사용자가 거부함
+
+---
+
+## Project Overview
+
+<프로젝트 한 줄 설명>
+
+**Tech Stack:** <언어, 프레임워크, DB, 메시지 브로커 등>
+
+**Base Package:** `<base.package>`
+
+---
+
+## Build & Development Commands
+
+```bash
+# 빌드
+<command>
+
+# 테스트
+<command>
+
+# 실행
+<command>
+```
+
+---
+
+## Module Architecture (해당 시)
+
+| Module | Pattern | Purpose |
+|--------|---------|---------|
+| <module> | <pattern> | <purpose> |
+
+**핵심 규칙:**
+- <규칙 1>
+- <규칙 2>
+
+---
+
+## 디버깅 & 로그 분석 규칙
+
+### 근본 원인 분석 (추측성 수정 금지)
+
+1. 증상 수집 (에러, 스택 트레이스, 로그 모두)
+2. 데이터 흐름 역추적
+3. 단일 가설 수립
+4. 최소 변경으로 검증
+5. 3회 실패 시 접근 재검토
+
+### 운영 로그 분석
+
+- `--tail 100` 기본, 필요 시 `--tail 500`/`1000`
+- `grep`으로 키워드 필터링 필수
+- `--since` 로 시간 범위 좁히기
+- `-B 5 -A 5`로 컨텍스트 확보
+- 못 찾으면 인정하고 범위 확장 (추측 금지)
+
+---
+
+## Skills 문서 (상세 가이드)
+
+| 문서 | 상황 |
+|------|------|
+| [CODING_RULES.md](.claude/skills/CODING_RULES.md) | 코드 작성 규칙 |
+| [EXTERNAL_SYSTEMS.md](.claude/skills/EXTERNAL_SYSTEMS.md) | 외부 시스템 연동 |
+| [PATTERNS.md](.claude/skills/PATTERNS.md) | 아키텍처 패턴 |

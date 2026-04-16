@@ -1,0 +1,49 @@
+# 외부 시스템 연동 가이드
+
+> 외부 DB, API, 인프라 접근 방법. SSH/직접접근 금지 등 보안 규칙 포함.
+
+## 서버 인프라
+
+| 역할 | IP | 컨테이너명 | 비고 |
+|------|----|----|------|
+| <역할> | <ip> | <name> | <비고> |
+
+## 운영 DB 접근
+
+### ✅ 올바른 방법: Docker 원격 API
+```bash
+DOCKER_HOST=tcp://<ip>:2375 DOCKER_API_VERSION=1.46 \
+  docker exec <container> psql -U <user> <db> -c "<query>"
+```
+
+### ❌ 금지: SSH
+- 운영 서버는 SSH 비활성
+- 시도 시 보안 알림 발생
+
+## 외부 API 연동
+
+### <외부 시스템 1>
+- Base URL: `<url>`
+- 인증: <방식>
+- 주요 엔드포인트:
+  - `POST /...` — <설명>
+- 콜백: <설명>
+
+## 메시지 브로커 (해당 시)
+
+- Host: `<host>`
+- 가상 호스트: `<vhost>`
+- 큐 목록은 [상세 문서] 참조
+
+## 운영 로그 확인
+
+```bash
+DOCKER_HOST=tcp://<ip>:2375 DOCKER_API_VERSION=1.46 \
+  docker logs --tail 200 <container> 2>&1 | grep -iE "error|exception"
+```
+
+## 보안 규칙
+
+- 토큰/비밀번호는 환경변수 또는 시크릿 매니저에서 조회
+- 코드/로그에 평문 노출 금지
+- 디버그용 임시 로그라도 운영 push 전에 제거

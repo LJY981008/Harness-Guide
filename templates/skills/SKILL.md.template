@@ -1,0 +1,37 @@
+---
+name: <kebab-case-name>
+description: <이 skill이 무엇을 하고 언제 쓰는지. 1536자 내. 앞쪽에 핵심 키워드 배치. 트리거 문구 예시 포함.>
+when_to_use: <선택. 추가 트리거 조건. 예: "Repository 수정 시, 쿼리 변경 시">
+paths: "**/*.java"                   # 선택. glob로 특정 파일 작업 시 자동 로드
+allowed-tools: Read Grep              # 선택. 이 skill 활성 시 사전 승인 툴
+# disable-model-invocation: true     # 선택. Claude 자동 호출 차단 (/name으로만 호출)
+# user-invocable: false              # 선택. / 메뉴에서 숨김 (백그라운드 지식)
+# context: fork                      # 선택. subagent에서 실행
+# agent: Explore                     # 선택. context:fork 시 사용할 subagent
+---
+
+# <Skill 제목>
+
+> 한 줄 요약: 이 skill이 해결하는 문제/제공하는 가이드
+
+---
+
+## 섹션 1
+
+핵심 규칙/절차/참조 내용.
+
+## 섹션 2
+
+더 상세한 내용.
+
+## 참조
+
+- [../<other-skill>/SKILL.md](../<other-skill>/SKILL.md)
+- 외부 리소스 링크
+
+---
+
+**팁**:
+- SKILL.md 500줄 이하 권장. 상세 내용은 `references/*.md` 로 분리.
+- `description` 앞부분에 가장 중요한 사용 케이스를 배치 (잘려도 유지됨).
+- Skill 활성 시 full body가 context에 주입되므로, 자주 안 쓰는 long reference는 별도 파일로.

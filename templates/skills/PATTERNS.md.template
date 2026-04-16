@@ -1,0 +1,58 @@
+# 아키텍처 패턴
+
+> 모듈 경계, 의존성 방향, 트랜잭션 규칙 등.
+
+## 모듈 구성
+
+```
+api/              → REST controller, orchestrator
+common-api/       → Port 인터페이스, DTO, Event
+<feature-module>/ → 도메인 로직
+<infra-module>/   → 외부 연동
+```
+
+## 핵심 규칙
+
+### 모듈 경계
+- REST Controller는 `api` 모듈에만 존재
+- 다른 모듈 간 통신은 `common-api`의 Port 인터페이스로
+- 모듈 간 직접 의존 금지 (Port를 통해서만)
+
+### 트랜잭션
+- Service 메서드 단위 `@Transactional`
+- 외부 HTTP 호출은 `propagation = NOT_SUPPORTED`
+- 긴 작업은 단계로 쪼개고 단계마다 별 TX
+
+### 이벤트 / Outbox
+- 이벤트 발행은 Outbox 패턴 사용 (트랜잭션 안전)
+- Consumer는 멱등성 보장
+
+## DDD Lite 모듈 패키지 구조
+
+```
+application/   → Service, DTO
+domain/        → 모델
+infrastructure/→ JPA Entity, Repository, Client
+presentation/  → Response DTO
+```
+
+## Feature-based 모듈 패키지 구조
+
+```
+feature/
+  service/    → 비즈니스 로직
+  facade/     → 의존성 그룹화
+  step/       → 워크플로우 단계
+  domain/     → Entity, Repository
+```
+
+## 안티패턴
+
+### ❌ Service에서 다른 모듈 Repository 직접 호출
+- Port 인터페이스를 거쳐야 함
+
+### ❌ Controller에서 비즈니스 로직
+- Orchestrator/Service로 위임
+
+### ❌ 외부 호출을 트랜잭션 내부에서
+- 트랜잭션 길어지고 롤백 시 부작용
