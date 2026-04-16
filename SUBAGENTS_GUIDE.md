@@ -1,8 +1,24 @@
-# 서브에이전트(Sub-agents) 작성 가이드
+# 서브에이전트(Sub-agents) 작성 규격
 
 ## 서브에이전트란?
 
 `.claude/agents/*.md`. 메인 Claude 대화에서 `Agent` 툴로 호출되는 **별 컨텍스트의 작업자**. 메인 컨텍스트를 더럽히지 않고 복잡한 분석을 위임할 때 쓴다.
+
+## 공식 발견 위치 (5곳)
+
+Subagent로 인식되는 `.md`는 다음 5곳에만 위치할 수 있다. 이 외의 위치에 둔 `.md`는 subagent가 아니며 frontmatter가 파싱되지 않는다.
+
+| 우선순위 | 위치 |
+|---|---|
+| 1 (highest) | Managed settings 의 `.claude/agents/` |
+| 2 | `--agents` CLI flag (JSON, 세션 한정) |
+| 3 | 프로젝트 `.claude/agents/` |
+| 4 | 사용자 `~/.claude/agents/` |
+| 5 (lowest) | Plugin의 `agents/` 디렉터리 |
+
+**발견 규칙**: 프로젝트 subagent는 **CWD 기준 walking up(상위 디렉터리 순회)**으로 발견된다. 즉 CWD가 `<repo>/modules/payment/`일 때 `modules/payment/.claude/agents/` + `<repo>/.claude/agents/` 둘 다 발견되지만, CWD가 `<repo>/`이면 루트만 발견된다.
+
+**스킬 폴더 내부 `.md`는 subagent가 아니다**: `.claude/skills/xxx/agents/*.md` 같은 위치의 파일은 Claude Code가 subagent로 등록하지 않는다. 이 파일의 frontmatter `hooks:`는 런타임 훅으로 작동하지 않으며, LLM이 텍스트로 읽고 자율 판단하는 비결정 영역이 된다. 훅 기반 추적이 필요하면 반드시 위 5곳 중 하나에 등록해야 한다.
 
 ## 언제 만드는가
 
@@ -87,28 +103,74 @@ Examples 섹션은 거의 필수. user의 한국어 발화 → assistant 응답 
 - 추측 금지, 코드/DB 실측 기반
 ```
 
+## Frontmatter `hooks:` 필드 (공식 지원)
+
+Subagent frontmatter에 `hooks:` 필드를 정의하면 **해당 subagent 라이프사이클에만** 훅이 fire된다. 전역 `settings.json` 훅과 달리 다른 subagent·메인 세션에는 영향이 없다.
+
+```yaml
+---
+name: payment-analyzer
+description: 결제 모듈 분석 전담
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/payment-bash-guard.sh"
+  PostToolUse:
+    - matcher: "Write"
+      hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/verify-payment-output.sh"
+  Stop:
+    - hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/validate-analysis-result.sh"
+  # 런타임에 SubagentStop으로 변환됨
+---
+```
+
+### 이벤트 종류
+
+| 이벤트 | Matcher | fire 시점 |
+|---|---|---|
+| `PreToolUse` | 도구 이름 | Subagent가 도구를 사용하기 전 |
+| `PostToolUse` | 도구 이름 | Subagent가 도구를 사용한 후 |
+| `Stop` | (없음) | Subagent가 완료될 때 (런타임에 `SubagentStop`으로 변환) |
+
+### 활용 패턴
+
+- **결정론적 검증**: agent가 작성한 산출물의 경로·포맷을 셸 스크립트로 물리 검증 후 실패 시 재시도 유도
+- **목적별 훅 분리**: 전역 `settings.json` 훅이 "모든 툴 호출에 fire"되는 문제를 회피. 예를 들어 `search-analyzer`·`feature-implementor`·`migration-runner`가 각자 다른 훅을 가지도록 설계.
+- **Agent Teams 파이프라인 추적**: 스킬이 여러 subagent를 순차 호출할 때 각 subagent의 PostToolUse·SubagentStop으로 단계별 로그·검증 자동화.
+
+### 위치 제약
+
+**본 파일이 공식 5곳 중 하나에 있어야만 훅이 fire된다**. 스킬 폴더 내부(`.claude/skills/xxx/agents/*.md`)에 둔 `.md`는 Claude Code가 subagent로 인식하지 않으므로 `hooks:` 정의가 무시되고 LLM이 텍스트로 읽는 비결정 영역이 된다.
+
 ## 안티패턴
 
-- ❌ **너무 일반적인 에이전트**: "코드 리뷰 에이전트" → 매칭 모호. 차라리 `tx-integrity-analyzer`처럼 특화.
-- ❌ **에이전트 안에서 또 에이전트 호출**: 가능하긴 하나 컨텍스트 폭발. 한 단계만.
-- ❌ **메인이 할 일을 굳이 에이전트로**: 단순 grep, 단일 파일 수정 등은 메인에서.
-- ❌ **출력 포맷 미정의**: 에이전트 결과가 자유서술이면 메인이 다시 정리해야 함. 표/체크리스트 강제.
+- ❌ **너무 일반적인 에이전트**: "코드 리뷰 에이전트" → 매칭 모호. `tx-integrity-analyzer`처럼 특화한다.
+- ❌ **에이전트 안에서 또 에이전트 호출**: 기술적으로 가능하나 컨텍스트 폭발을 유발한다. 한 단계만 허용한다.
+- ❌ **메인이 할 일을 굳이 에이전트로**: 단순 grep·단일 파일 수정은 메인에서 처리한다.
+- ❌ **출력 포맷 미정의**: 결과가 자유서술이면 메인이 다시 정리해야 한다. 표·체크리스트 형식을 강제한다.
+- ❌ **스킬 폴더 내부에 agent `.md` 배치**: subagent로 인식되지 않아 frontmatter `hooks:`·`allowed-tools`·`model` 등이 작동하지 않는다. 훅 추적이 필요하면 반드시 `.claude/agents/`에 등록한다.
+- ❌ **훅으로 처리할 규칙을 프롬프트 텍스트에만 의존**: LLM이 지시를 매번 다르게 해석하여 비결정 동작을 유발한다. 결정론이 필요하면 frontmatter `hooks:` + 셸 스크립트로 강제한다.
 
 ## 실행 예시
 
-메인 Claude가:
 ```
 Agent(
   description="Outbox 취약점 분석",
-  subagent_type="general-purpose",  # 또는 커스텀 등록 시 그 이름
+  subagent_type="outbox-vulnerability-analyzer",  # .claude/agents/에 등록된 이름
   prompt="..."
 )
 ```
-→ 서브에이전트가 자기 컨텍스트에서 작업 → 결과 텍스트만 메인에 반환.
+서브에이전트가 자기 컨텍스트에서 작업하고 결과 텍스트만 메인에 반환한다. 등록된 subagent의 frontmatter 훅은 해당 실행 중 fire된다.
 
 ## 병렬 실행
 
-여러 에이전트를 동시에 돌릴 수 있다 (메인이 한 메시지에 여러 Agent 툴 호출). 독립적인 분석들을 병렬화하면 시간 절약.
+독립적인 분석은 한 메시지에 여러 Agent 툴을 호출하여 병렬화할 수 있다.
 
 ## 템플릿
 

@@ -19,8 +19,9 @@
 | **`permissions.deny` 필드 버그** (GitHub [#6699](https://github.com/anthropics/claude-code/issues/6699), [#27040](https://github.com/anthropics/claude-code/issues/27040)) | v1.0.93+ 에서 `deny` 규칙 무시됨 — 차단되어야 할 명령이 실행됨 | **PreToolUse hook + `exit 2`**가 유일한 실제 차단 수단 (Phase A-0 참고) |
 | **Agent frontmatter `paths` 공식 미지원** | Skill은 `paths` glob으로 자동 로드되나 Agent는 `description` 매칭만 지원 | `recommend-agent-on-stop.sh`로 경로 키워드 기반 추천 주입 (Phase G) |
 | **PostToolUse/Stop `decision:block`은 피드백만** | 차단이 아닌 "Claude에게 메시지 주입" 수준. LLM이 무시 가능 | 진짜 물리적 강제는 **PreToolUse + exit 2**, CI 파이프라인, Checkstyle `ignoreFailures=false`만 가능 |
-| **모노레포 계층 설정 지원 불완전** (GitHub [#12962](https://github.com/anthropics/claude-code/issues/12962) OPEN, [#37344](https://github.com/anthropics/claude-code/issues/37344) 2026-03-25 중복 종료) | 계층 자동 발견 지원 여부가 요소별 상이. `settings.json`/hooks/subagents/MCP는 **루트만**, `CLAUDE.md`/`skills`/`rules`는 **계층 지원** | Phase I 참고 — hooks·subagents는 루트 몰빵 + 경로 분기 스크립트, skills·rules는 모듈 폴더 분산 |
+| **모노레포 계층 설정 지원 불완전** (GitHub [#12962](https://github.com/anthropics/claude-code/issues/12962) OPEN, [#37344](https://github.com/anthropics/claude-code/issues/37344) 2026-03-25 중복 종료) | 계층 자동 발견 지원 여부가 요소별 상이. `settings.json`/hooks/MCP는 **루트만**, `CLAUDE.md`/`skills`/`rules`는 **양방향 계층 지원**, subagents는 **CWD 기준 walking up만** | Phase I 참고 — hooks는 루트 몰빵 + 경로 분기 스크립트, skills·rules는 모듈 폴더 분산, subagents는 루트 등록 원칙 (모듈 단위 cd 워크플로우일 때만 모듈 `.claude/agents/` 발견) |
 | **`paths:` frontmatter 부분 버그** (GitHub [#23478](https://github.com/anthropics/claude-code/issues/23478), [#21858](https://github.com/anthropics/claude-code/issues/21858)) | `.claude/rules/`의 `paths:` 매칭이 **Read 툴에만 트리거, Write에는 안 됨**. user-level(`~/.claude/rules/`)은 아예 `paths:` 무시 | 중요한 모듈 규칙은 Write 경로도 커버되도록 CLAUDE.md 계층 로드 병행, user-level은 `paths` 없는 전역 규칙으로만 사용 |
+| **Subagent 공식 발견 위치 5곳만 유효** | managed settings / `--agents` CLI / `.claude/agents/` (루트 또는 CWD 상위) / `~/.claude/agents/` / plugin `agents/`. **스킬 폴더 내부 `.md`는 subagent로 인식 안 됨** | 스킬 폴더 안 `.md`는 "프롬프트 파일"로만 사용 가능. frontmatter `hooks:` 등을 정규 동작시키려면 **루트 `.claude/agents/`에 등록 필수** |
 
 **설계 함의**: "실제 차단이 필요한 규칙"과 "유도 수준이면 충분한 규칙"을 명확히 구분하라. 위험 명령·빌드 실패는 전자, 에이전트 호출 추천·리뷰 유도는 후자.
 
@@ -28,12 +29,21 @@
 
 | 요소 | 계층 자동 발견 | 비고 |
 |---|---|---|
-| `CLAUDE.md` | ✅ | 상위/하위 디렉터리 모두. 하위는 파일 접근 시 on-demand |
-| `.claude/skills/` | ✅ | 2025 후반 추가. `packages/xxx/.claude/skills/` 자동 발견 |
-| `.claude/rules/` | ✅ | 2025 후반 추가. `paths:` frontmatter로 경로 스코핑 |
-| `.claude/agents/` | ❌ | 루트만 로드. subagent는 description 매칭만 |
+| `CLAUDE.md` | ✅ 양방향 | 상위/하위 디렉터리 모두. 하위는 파일 접근 시 on-demand |
+| `.claude/skills/` | ✅ 양방향 | 2025 후반 추가. `packages/xxx/.claude/skills/` 자동 발견 |
+| `.claude/rules/` | ✅ 양방향 | 2025 후반 추가. `paths:` frontmatter로 경로 스코핑 |
+| `.claude/agents/` | ⚠️ CWD 기준 walking up | CWD에서 **상위 디렉터리로만** 순회. 루트에서 Claude 시작 시 루트만, `cd modules/xxx/` 후 시작 시 모듈+루트 둘 다 발견 |
 | `.claude/settings.json` (hooks/permissions/env) | ❌ | 루트만. Issue #12962 OPEN |
 | MCP 서버 | ❌ | 세션 글로벌 |
+
+**Subagent 정규 위치 5곳** (이 외 위치의 `.md`는 subagent로 인식 안 됨):
+1. Managed settings (`.claude/agents/`)
+2. `--agents` CLI flag
+3. `.claude/agents/` (프로젝트, walking up)
+4. `~/.claude/agents/` (사용자)
+5. Plugin `agents/` 디렉터리
+
+**주의**: `.claude/skills/xxx/agents/*.md`처럼 스킬 폴더 내부에 둔 `.md`는 **subagent가 아니다**. 단순 프롬프트 파일로 취급되며, frontmatter `hooks:`를 정의해도 **Claude Code 런타임이 파싱하지 않고** 그냥 텍스트로 LLM에 전달된다. 이 경우 LLM이 해당 지시를 따를 수도, 따르지 않을 수도 있는 **비결정적 상태**가 된다. Agent Teams 패턴 적용 시 Phase I-10 반드시 참조.
 
 ---
 
@@ -1223,27 +1233,71 @@ done
 
 ### I-10. Agent Teams via Nested Skills 패턴
 
-> **목적**: 스킬 안에서 Agent 툴을 다단계 호출해 **모듈별 멀티스텝 파이프라인**을 캡슐화. 공식 subagent 등록(`.claude/agents/`)의 nested 미지원 한계를 **"Agent 툴 + 파일 기반 모듈 프롬프트"**로 우회.
+> **목적**: 스킬이 Agent 툴을 다단계 호출해 **모듈별 멀티스텝 파이프라인**을 캡슐화한다. 두 변형이 존재하며 각각의 용도·제약을 명확히 구분해야 한다.
 
-#### I-10-1. 구조
+#### I-10-1. 두 변형의 정의
+
+| 변형 | 구조 | frontmatter `hooks:` 작동 | 용도 |
+|---|---|---|---|
+| **패턴 A** (프롬프트 파일 모듈화) | Agent `.md`를 **스킬 폴더 내부**(`.claude/skills/xxx/agents/`)에 둠 | ❌ **작동 안 함**. 단순 프롬프트 텍스트로 LLM에 전달됨 | 경량 프롬프트 분할·재사용. 훅 추적 불필요 시. |
+| **패턴 B** (공식 subagent + 스킬 오케스트레이터) | Agent `.md`를 **루트 `.claude/agents/`**에 등록, 스킬은 `subagent_type:`으로 호출 | ✅ **작동**. PreToolUse/PostToolUse/SubagentStop 모두 fire | 훅 기반 자동 추적·검증이 필요한 재사용 파이프라인. |
+
+**선택 기준**: 훅을 통한 **결정론적 추적·검증**이 요구되면 반드시 **패턴 B**를 선택한다. 패턴 A의 frontmatter는 LLM이 텍스트로 읽고 자율 판단하는 비결정 영역이다.
+
+#### I-10-2. 패턴 A 구조 (프롬프트 파일 모듈화)
 
 ```
 modules/payment/.claude/skills/payment-pipeline/
 ├── SKILL.md                    ← v2.1 nested 자동 발견 ✅
-├── agents/                     ← 파일 기반 "서브에이전트 프롬프트"
-│   ├── analyzer.md             ← Step 1: 기획/요구사항 분석
-│   ├── planner.md              ← Step 2: 구현 계획 수립
-│   ├── implementor.md          ← Step 3: 코드 작성
-│   └── verifier.md             ← Step 4: 검증·테스트
-├── references/                 ← 공용 참조 (각 단계에서 Read)
+├── agents/                     ← ⚠️ Claude Code 공식 subagent 디렉터리 아님
+│   ├── analyzer.md             ← 프롬프트 파일. hooks frontmatter 정의해도 파싱 X
+│   ├── planner.md
+│   ├── implementor.md
+│   └── verifier.md
+├── references/                 ← 공용 참조
 │   └── domain-rules.md
-└── temp/                       ← 중간 산출물 (파이프라인 runtime)
-    ├── 01_analysis.md          ← analyzer 결과
-    ├── 02_plan.md              ← planner 결과
+└── temp/                       ← 중간 산출물
+    ├── 01_analysis.md
+    ├── 02_plan.md
     └── ...
 ```
 
-**핵심 오해 주의**: `agents/` 폴더는 **Claude Code가 인식하는 공식 subagent 디렉터리가 아님**. 단순히 스킬 소유의 "프롬프트 파일 모듈화" 관례. 공식 subagent는 루트 `.claude/agents/`에만 존재.
+스킬이 `Agent({subagent_type: "general-purpose", prompt: "analyzer.md를 Read해서..."})` 형식으로 호출하면 **general-purpose 에이전트**가 실행되어 `.md`를 입력 텍스트로 읽는다. `agents/` 폴더 명은 순수 관례일 뿐이다.
+
+#### I-10-3. 패턴 B 구조 (공식 등록 + 오케스트레이터)
+
+```
+<repo>/.claude/agents/                        ← 공식 subagent 위치
+├── payment-analyzer.md                        ← frontmatter hooks 정의 → 실제 fire
+├── payment-planner.md
+├── payment-implementor.md
+└── payment-verifier.md
+
+<repo>/modules/payment/.claude/skills/payment-pipeline/
+├── SKILL.md                                   ← Agent({subagent_type: "payment-analyzer"}) 순차 호출
+└── temp/                                      ← 중간 산출물 (agent의 PostToolUse 훅으로 검증)
+```
+
+Agent frontmatter 예시:
+```yaml
+---
+name: payment-analyzer
+description: 결제 모듈 분석 전담
+hooks:
+  PostToolUse:
+    - matcher: "Write"
+      hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/verify-payment-output.sh"
+  Stop:
+    - hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/validate-analysis-result.sh"
+  # 위 Stop은 런타임에 SubagentStop으로 변환되어 이 agent 종료 시만 fire
+---
+```
+
+이 훅들은 **해당 subagent 라이프사이클에만** fire되며, 다른 agent·메인 세션에는 영향 없다.
 
 #### I-10-2. SKILL.md 파이프라인 정의
 
@@ -1281,17 +1335,16 @@ Agent({
 (테스트·빌드 검증, 실패 시 롤백 지시)
 ```
 
-#### I-10-3. 장점
+#### I-10-4. 공통 장점
 
-- **모듈별 파이프라인 캡슐화**: `/payment-pipeline` 한 번으로 4단계 자동 실행
-- **컨텍스트 격리**: 각 스텝의 내부 탐색이 메인에 누적되지 않음 → 메인 컨텍스트 보호
-- **단계별 재사용**: `analyzer.md`만 수정하면 모든 파이프라인에 반영
-- **subagent_type 조합**: 읽기 전용 단계는 `Explore`(Haiku), 중요 단계는 `general-purpose`(Opus) 등 **모델 비용 최적화** 가능
-- **공식 subagent 등록 불필요**: 루트 `.claude/agents/`에 4개 안 추가해도 됨
+- **모듈별 파이프라인 캡슐화**: `/payment-pipeline` 단일 호출로 다단계 실행
+- **컨텍스트 격리**: 각 스텝의 내부 탐색이 메인에 누적되지 않아 메인 컨텍스트 보호
+- **단계별 재사용**: 단일 프롬프트·agent 수정이 전 파이프라인에 반영
+- **모델 조합 최적화**: 읽기 전용 단계는 `Explore`(Haiku), 중요 단계는 `general-purpose`(Opus) 등 `subagent_type`으로 비용 조정
 
-#### I-10-4. 단점 (도입 전 반드시 체크)
+#### I-10-5. 공통 단점
 
-**토큰 비용 — 가장 큰 단점**:
+**토큰 비용**:
 
 | 항목 | 대략 토큰 |
 |---|---|
@@ -1299,83 +1352,116 @@ Agent({
 | CLAUDE.md 재로드 | 1~5k |
 | Skill descriptions 리스트 | 1~3k |
 | 전달 받은 프롬프트 | 0.2~1k |
-| 지시받은 `.md` 파일 Read | 1~10k |
+| 지시받은 `.md` 파일 Read (패턴 A) 또는 agent 시스템 프롬프트 (패턴 B) | 1~10k |
 | **Agent 호출 1회당 고정비** | **~8~20k 토큰** |
 
-- 4단계 파이프라인이면 **고정 오버헤드만 30~80k 토큰** (실제 작업 토큰 별도)
-- **Prompt cache 미적용**: fork마다 새 세션 → 5분 TTL 캐시 공유 X
-- 단계별 작업량이 작으면 **오버헤드 > 실작업**. 메인 직접 처리가 토큰 효율적
+- 4단계 파이프라인의 고정 오버헤드만 30~80k 토큰 (실작업 토큰 별도)
+- Prompt cache는 fork마다 새 세션이므로 공유되지 않는다
+- 단계별 작업량이 작으면 오버헤드가 실작업을 초과한다. 메인 직접 처리가 유리한 케이스도 있다.
 
-**관측성 저하**:
-- 서브에이전트 내부 대화는 메인에 **안 보임** → 디버깅 어려움
-- 실패 시 **요약만 반환** → 원인 추적 어려움 → 중간 산출물 파일(`temp/*.md`)이 디버깅 흔적 역할 겸함
+**레이턴시**:
+- 순차 실행 시 단일 처리 대비 N배 시간
+- fork 시작마다 초기화 오버헤드
+- 독립 단계의 병렬화(한 메시지에 Agent 툴 다중 호출)로만 완화 가능
 
-**에러 핸들링 취약**:
-- `[DONE]` **문자열 매칭**으로 완료 감지 → 포맷 이탈 시 파이프라인 꼬임
-- 중간 실패 시 **재시작 메커니즘 없음** → 처음부터 재실행 필요
-- 타임아웃 관리를 SKILL.md가 LLM 판단으로 처리 → **비결정적**
-
-**레이턴시 N배**:
-- 순차 실행 시 단일 처리의 **4배 시간**
-- 각 fork 시작 시 초기화 수 초
-- 의존성 없는 단계 병렬화는 가능하지만 설계 복잡
-
-**상태 전달 파일화 강제**:
-- 서브에이전트는 **이전 단계 컨텍스트 완전 격리**
-- 결과 전달하려면 반드시 파일로 기록 (`temp/01_*.md` 패턴)
-- 파일명·스키마 규약 이탈 시 깨짐
-
-**공식 hook·frontmatter 연결 불가**:
-- 스폰된 서브에이전트는 **general-purpose 계열** → `allowed-tools`·`hooks` frontmatter 제어 제한
-- 프로젝트 등록 subagent와 **별개로 동작**
+**상태 전달**:
+- 서브에이전트는 이전 단계 컨텍스트와 완전 격리되므로 결과 전달은 반드시 파일로 기록한다
+- 파일명·스키마 규약 이탈 시 다음 단계가 실패한다
 
 **비결정성**:
-- 각 LLM 호출 독립 → 동일 입력 다른 출력 가능
-- 포맷 규약 이탈 시 다음 단계 깨짐 → CI에서 **간헐 실패** 빈번
+- LLM 호출이 독립이므로 동일 입력도 다른 출력이 가능하다
+- 포맷 규약 이탈이 후속 단계 실패를 유발하므로 CI에서 간헐 실패가 발생할 수 있다
 
-#### I-10-5. 도입 판단 기준
+#### I-10-6. 패턴 A 고유 단점 (프롬프트 파일 방식)
 
-**쓸만한 경우** ✅:
-- 각 단계 작업량이 **큰** (단계당 파일 10+개 read·edit) → 격리 이득 > fork 비용
-- 단계 독립성 높고 결과만 다음에 넘기면 됨
-- 사용자 입력 복잡, 여러 전문 관점 필요 (기획+계획+구현+검증)
-- **재사용 많은 파이프라인** (한 번 설계, 100회 실행) → 설계 비용 amortize
+**관측성 저하**:
+- 서브에이전트 내부 대화가 메인에 노출되지 않아 디버깅이 어렵다
+- 실패 시 요약만 반환되므로 원인 추적이 제한된다
+- 중간 산출물 파일(`temp/*.md`)이 유일한 디버깅 흔적이다
 
-**피해야 할 경우** ❌:
-- 단계별 작업이 **짧음** (각 5~10 툴 호출) → 오버헤드가 작업보다 큼
-- 단계 간 **상태 공유 많음** → 파일 전달 비용·복잡도 폭증
-- 디버깅·관측성 중요 (프로덕션 CI 실행) → 격리가 오히려 독
-- **1회성 작업** → 설계 비용 회수 불가
+**훅 미작동**:
+- `.md` frontmatter의 `hooks:` 정의는 Claude Code가 파싱하지 않는다
+- LLM이 텍스트로 읽고 자율 판단하여 지시를 따르거나 무시한다 → **비결정적 동작**
 
-#### I-10-6. 완화책
+**안티패턴 — 문서 위치 비결정성 사례**:
+```
+증상: Agent A가 temp/01.md에 결과를 써야 하는데 가끔 다른 경로에 저장.
+      Agent B가 temp/01.md를 찾지 못해 파이프라인 중단.
 
-토큰 비용 30~50% 절감 가능한 방법들:
+원인: agent A의 frontmatter에 `hooks: PostToolUse: ... 경로 검증` 정의했으나,
+      해당 `.md`가 스킬 폴더 내부 파일이므로 런타임 훅으로 등록되지 않음.
+      Claude Code는 이 frontmatter를 무시하고 전체 내용을 LLM 프롬프트로 전달.
+      LLM이 경로 규칙을 매번 다르게 해석하여 비결정 동작 발생.
 
-1. **`subagent_type` 지정** — 읽기 전용 단계는 `Explore` (Haiku, Opus 대비 25배 저렴)
-2. **파이프라인 단계 최소화** — 4 → 2~3단계 통합 가능한 곳 찾기
-3. **`.md` 파일 500줄 이하** — 공용 내용은 `references/`에 두고 필요 시만 Read
-4. **단계 간 전달은 "요약만"** — 전문 말고 500자 이내 요약으로 제약
-5. **의존성 없는 단계 병렬화** — 한 메시지에 Agent 툴 다중 호출
+해결: 훅 기반 결정론적 검증이 필요하면 패턴 B로 전환. agent를 루트 등록.
+```
 
-#### I-10-7. 검증
+**에러 핸들링 취약**:
+- `[DONE]` 같은 문자열 매칭으로 완료 감지 → 포맷 이탈 시 파이프라인 중단
+- 중간 실패 시 재시작 메커니즘이 없어 처음부터 재실행 필요
+
+#### I-10-7. 패턴 B 고유 이점
+
+**결정론적 훅 fire**:
+- `PostToolUse`, `SubagentStop` 등이 정의된 subagent 실행 시 **반드시** fire
+- 셸 스크립트 기반 검증 → LLM 해석 여지 없음
+
+**자연스러운 훅 분리**:
+- 목적별 subagent(`search-analyzer`·`feature-implementor`·`migration-runner`)마다 각자의 frontmatter 훅을 가진다
+- 전역 `settings.json` 훅의 "모든 툴 호출에 fire" 문제와 달리 **해당 agent 실행 시에만** fire되어 스크립트 내부 분기 불필요
+- nigun_01 사례의 "서칭/기능 추가/수정/마이그레이션별 다른 훅" 요구가 자연스럽게 해결
+
+**도구 제한 명시**:
+- `allowed-tools`, `model` 등 frontmatter 필드로 subagent별 권한·모델 정밀 제어
+
+#### I-10-8. 도입 판단 기준
+
+**패턴 A 적합**: 경량 프롬프트 분할이 목적이고 훅 기반 검증이 불필요한 경우. 예: 문서 생성 파이프라인, 단발성 분석.
+
+**패턴 B 적합**: 결정론적 추적·검증이 필요한 재사용 파이프라인. CI 통합이 필요한 워크플로우. 증상 디버깅이 필수인 운영 환경.
+
+**둘 다 피해야 할 경우**:
+- 단계별 작업이 짧음 (각 5~10 툴 호출) → 오버헤드가 실작업 초과
+- 단계 간 상태 공유 과다 → 파일 전달 복잡도 폭증
+- 1회성 작업 → 설계 비용 회수 불가
+
+#### I-10-9. 완화책
+
+토큰·레이턴시 절감:
+
+1. **`subagent_type` 지정**으로 읽기 전용 단계는 `Explore`(Haiku) 사용 (Opus 대비 25배 저렴)
+2. **파이프라인 단계 최소화** — 4단계를 2~3단계로 통합 가능한 지점 탐색
+3. **프롬프트·시스템 파일 500줄 이하** — 공용 내용은 `references/`로 분리
+4. **단계 간 전달은 요약만** — 전문 전달 지양, 500자 이내 요약 강제
+5. **독립 단계 병렬화** — 한 메시지에 Agent 툴 다중 호출
+
+#### I-10-10. 검증
 
 ```bash
 # 1. nested skill 자동 발견 확인
 # 해당 모듈 파일 편집 중 세션에서: "What skills are available?"
-# → payment-pipeline 포함돼야 함
+# → payment-pipeline 포함 여부 확인
 
-# 2. agents/ 폴더 존재 확인 (관례상 폴더명)
-ls modules/payment/.claude/skills/payment-pipeline/agents/
+# 2. 패턴 B — agent가 루트에 등록되었는지 확인
+ls .claude/agents/payment-*.md
 
-# 3. temp/ runtime 디렉터리 .gitignore 등록 확인
+# 3. 패턴 A 사용 시 temp/ runtime 디렉터리 .gitignore 등록 확인
 grep -q "temp/" .gitignore || echo "⚠️ temp/ gitignore 누락"
 
-# 4. 토큰 비용 벤치마크 (선택)
-# /payment-pipeline 실행 → Claude Code의 `/cost` 또는 세션 토큰 사용량 확인
-# → 메인 직접 처리 대비 1.5~3배 범위인지 검증
+# 4. 패턴 B 훅 동작 확인
+# /payment-pipeline 실행 → .claude/hooks/.state/ 로그 또는
+# agent의 PostToolUse 커맨드 실행 흔적 확인
+
+# 5. 토큰 비용 벤치마크
+# /payment-pipeline 실행 후 Claude Code `/cost` 또는 세션 토큰 사용량
+# → 메인 직접 처리 대비 1.5~3배 범위 예상
 ```
 
-**요약**: 이 패턴은 **"복잡한 재사용 파이프라인"에만 유효**. 단순 모듈 규칙 적용은 nested skill + `paths:` 만으로 충분. 섣불리 적용하면 토큰·디버깅 비용으로 역효과.
+#### I-10-11. 요약
+
+- Agent Teams 패턴은 **복잡한 재사용 파이프라인 전용**이다. 단순 모듈 규칙 적용은 nested skill + `paths:`만으로 충분하다.
+- **훅 기반 결정론적 검증이 필요하면 반드시 패턴 B**를 채택한다. 패턴 A의 frontmatter 훅은 동작하지 않는다.
+- 패턴 A는 경량 프롬프트 분할 목적에만 적합하며, 훅 추적이 필요하면 패턴 B로 전환해야 한다.
 
 ### I-11. 실측 권장 수치 (60+ 모듈 기준)
 
