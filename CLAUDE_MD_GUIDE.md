@@ -102,12 +102,13 @@
 ```markdown
 | 작업 | 필수 참조 문서 | 핵심 내용 |
 |------|---------------|-----------|
-| **운영 DB 조회/수정** | [EXTERNAL_SYSTEMS.md](.claude/skills/EXTERNAL_SYSTEMS.md) | SSH 금지, Docker API로 접근 |
+| **운영 DB 조회/수정** | [EXTERNAL_SYSTEMS](.claude/skills/external-systems/SKILL.md) | SSH 금지, Docker API로 접근 |
 ```
 
 - "작업" 컬럼: Claude가 시작하려는 행위 유형
 - "핵심 내용": 한 줄 요약 (Claude가 이걸 보고 "아 이거 읽어야겠네" 판단)
-- 표 위에 `**아래 작업 전에 반드시 해당 문서를 Read 툴로 먼저 읽어야 합니다**` 강조 문구 필수
+- 표 위 강조 문구 (v2.2 권장): `**각 Skill은 description/paths 기반 자동 로드됩니다. 자동 로드 안 되면 Skill 툴로 로드하거나 /<skill-name>으로 수동 호출**`
+  - 구형 표현 "Read 툴로 먼저 읽어야 합니다"는 **지양** — 2026-04 공식은 Skill 툴 호출 또는 `/<name>`을 표준으로 함
 
 ## 자동 실행 절차
 
@@ -128,9 +129,10 @@
 CLAUDE.md를 작성한 뒤:
 
 1. 짧은 작업 한 가지를 시켜본다 (예: 파일 한 줄 수정)
-2. Claude가 BLOCKING 표의 문서를 실제로 읽는지 확인
-3. 안 읽으면 → 그 문서가 불필요하거나, 표가 불명확함. 수정.
+2. Claude가 BLOCKING 표의 skill을 **Skill 툴 또는 `/<name>`으로 호출**하는지 확인 (v2.2: Read 툴이 아님)
+3. 자동 호출 안 되면 → skill `description`·`paths` 수정, 또는 CLAUDE.md 표의 트리거 문구 보강
 4. 자동 실행 절차가 의도대로 동작하는지 확인 (테스트 → 빌드 → 커밋 → STOP)
+5. (v2.2 권장) `What skills are available?` 질의로 로드된 skill 전수 확인 — `SLASH_COMMAND_TOOL_CHAR_BUDGET` 넘으면 description이 잘려 자동 매칭 실패 가능
 
 ## 템플릿
 

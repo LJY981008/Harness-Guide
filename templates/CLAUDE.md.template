@@ -25,13 +25,13 @@
 
 ## ⛔ 필수 문서 참조 규칙 (BLOCKING)
 
-> 아래 작업 전에 반드시 해당 문서를 Read 툴로 먼저 읽어야 합니다. 문서를 읽지 않고 작업하면 안 됩니다.
+> 각 Skill은 `description`/`paths` 기반으로 자동 로드됩니다. 자동 로드 안 되면 **Skill 툴로 로드**하거나 `/<skill-name>`으로 수동 호출.
 
-| 작업 | 필수 참조 문서 | 핵심 내용 |
+| 작업 | 필수 참조 Skill | 핵심 내용 |
 |------|---------------|-----------|
-| **코드 작성 (모든 경우)** | [CODING_RULES.md](.claude/skills/CODING_RULES.md) | import 규칙, naming |
-| **외부 시스템 작업** | [EXTERNAL_SYSTEMS.md](.claude/skills/EXTERNAL_SYSTEMS.md) | 접근 방식, 인증, 서버 IP |
-| **아키텍처 변경** | [PATTERNS.md](.claude/skills/PATTERNS.md) | 모듈 경계, TX 규칙 |
+| **코드 작성 (모든 경우)** | [coding-rules](.claude/skills/coding-rules/SKILL.md) | import 규칙, naming |
+| **외부 시스템 작업** | [external-systems](.claude/skills/external-systems/SKILL.md) | 접근 방식, 인증, 서버 IP |
+| **아키텍처 변경** | [patterns](.claude/skills/patterns/SKILL.md) | 모듈 경계, TX 규칙 |
 
 **위반 시**: 잘못된 방법으로 접근하면 사용자가 거부함
 
@@ -94,10 +94,14 @@
 
 ---
 
-## Skills 문서 (상세 가이드)
+## Skills 인덱스
 
-| 문서 | 상황 |
-|------|------|
-| [CODING_RULES.md](.claude/skills/CODING_RULES.md) | 코드 작성 규칙 |
-| [EXTERNAL_SYSTEMS.md](.claude/skills/EXTERNAL_SYSTEMS.md) | 외부 시스템 연동 |
-| [PATTERNS.md](.claude/skills/PATTERNS.md) | 아키텍처 패턴 |
+### 도메인 참조 (자동 로드)
+- `coding-rules` — 코드 작성 규칙 (`paths: "**/*.<ext>"`)
+- `external-systems` — 외부 시스템 연동
+- `patterns` — 아키텍처 패턴
+
+### 운영 매크로 (수동 호출)
+<!-- 예: /dlq-check, /prod-log, /stuck-check -->
+
+> Skill은 **description/paths 자동 로드** 또는 **`/<name>` 슬래시 호출** 또는 **Skill 툴 호출**로 사용.

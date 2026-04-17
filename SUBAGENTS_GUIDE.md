@@ -62,6 +62,109 @@ description: "이 에이전트가 언제 호출되어야 하는지를 매우 상
 당신의 역할 / 분석 절차 / 출력 포맷 등을 상세히 기술.
 ```
 
+## 전체 frontmatter 필드 (2026-04 공식, v2.2 갱신)
+
+공식 문서(`code.claude.com/docs/en/sub-agents`)의 frontmatter 스키마. **필수는 `name`·`description` 2개**. 나머지는 선택.
+
+| 필드 | 용도 | 기본값 / 제약 |
+|---|---|---|
+| `name` | 고유 식별자 | lowercase + hyphen |
+| `description` | Claude가 위임 판단에 사용 | 트리거 예시 포함 권장 |
+| `tools` | allowlist. 미지정 시 **전체 툴 상속** | `Read, Grep, Glob, Bash` 등 |
+| `disallowedTools` | denylist. 상속된 툴에서 제거 | `tools`와 동시 사용 가능 (deny 먼저 적용) |
+| `model` | `sonnet`·`opus`·`haiku` 또는 full ID(`claude-opus-4-7`) 또는 `inherit` | 기본 `inherit` |
+| `permissionMode` | `default`·`acceptEdits`·`auto`·`dontAsk`·`bypassPermissions`·`plan` | 부모가 auto/bypass/acceptEdits면 **override 불가** |
+| `maxTurns` | 최대 agentic 턴 | |
+| `skills` | **시작 시 skill 본문을 시스템 프롬프트에 주입** (v2.2 공식화) | subagents는 parent skills 상속 안 함. 명시 필수 |
+| `mcpServers` | MCP 서버 목록 (인라인 또는 참조) | 이 subagent 한정 연결 |
+| `hooks` | subagent 라이프사이클 전용 훅 | `PreToolUse`/`PostToolUse`/`Stop`(→ `SubagentStop`으로 변환) |
+| `memory` | `user` / `project` / `local` 영속 디렉터리 | `~/.claude/agent-memory/<name>/` 또는 `.claude/agent-memory[-local]/<name>/` (v2.2 공식화) |
+| `background` | `true` 시 항상 백그라운드 실행 | default `false` |
+| `effort` | `low`·`medium`·`high`·`xhigh`·`max` 추론 레벨 (v2.2 신규) | 세션 effort override |
+| `isolation` | `worktree` 지정 시 임시 git worktree에 격리 실행 (v2.2 공식화) | 변경 없으면 자동 정리 |
+| `color` | UI 표시 색상 | `red`·`blue`·`green`·`yellow`·`purple`·`orange`·`pink`·`cyan` |
+| `initialPrompt` | `--agent`·`agent` 설정으로 **메인 세션 에이전트**로 띄울 때 자동 제출되는 첫 유저 턴 | commands·skills 처리됨 |
+
+### 공식 주의사항
+
+- **Plugin subagents**: `hooks`·`mcpServers`·`permissionMode` 필드 **무시** (보안). 사용 필요 시 `.claude/agents/` 또는 `~/.claude/agents/`로 복사.
+- **v2.1.63 rename**: 기존 `Task` 툴이 **`Agent`로 개명**. 기존 `Task(...)` 참조는 alias로 유지.
+- **Subagent는 subagent를 스폰할 수 없음**. Agent Teams가 필요하면 `/en/agent-teams` 참고.
+
+## Skills Preloading (v2.2 공식화)
+
+서브에이전트는 **parent 세션의 skill을 상속하지 않는다**. 필요한 skill은 `skills:` 필드로 명시 → 시작 시 **본문 전체가 시스템 프롬프트에 주입**됨 (invocation이 아닌 inject).
+
+```yaml
+---
+name: api-developer
+description: API 엔드포인트 구현 전담
+skills:
+  - api-conventions
+  - error-handling-patterns
+---
+
+팀 컨벤션·에러 핸들링 패턴을 따르는 API 엔드포인트를 구현.
+```
+
+**skill `context: fork`와의 차이**:
+
+| 방향 | 시스템 프롬프트 | Task | 추가 주입 |
+|---|---|---|---|
+| **Skill (`context: fork`)** | agent 타입의 기본 프롬프트 (`Explore` 등) | SKILL.md 본문 | CLAUDE.md |
+| **Subagent (`skills:`)** | subagent markdown 본문 | Claude 위임 메시지 | preloaded skills 본문 + CLAUDE.md |
+
+**활용 예**:
+- 결제 모듈 전담 서브에이전트 → `skills: [payment-conventions, api-error-handling]` 로 필수 지식 상시 주입
+- 초기 탐색 전담 → skill 없이 `description`만으로도 충분 (light)
+
+## Permission Modes (v2.2 정리)
+
+`permissionMode` 필드의 전체 옵션:
+
+| 모드 | 동작 |
+|---|---|
+| `default` | 표준 권한 체크 + 프롬프트 |
+| `acceptEdits` | 파일 편집·일반 FS 명령 자동 승인 (`additionalDirectories` 포함) |
+| `auto` | 백그라운드 분류기가 명령 검토 (auto mode) |
+| `dontAsk` | 프롬프트 자동 거절 (명시 allow된 툴만 통과) |
+| `bypassPermissions` | ⚠️ 프롬프트 전체 스킵. `.git`/`.claude`/`.vscode`/`.idea`/`.husky`는 여전히 확인 (단, `.claude/commands`·`.claude/agents`·`.claude/skills`는 예외) |
+| `plan` | 읽기 전용 탐색 (plan mode) |
+
+**상속 우선순위**: 부모가 `bypassPermissions`·`acceptEdits`면 **subagent의 `permissionMode` 무시**. `auto` 부모도 subagent는 auto 강제 상속.
+
+## Memory Scope 선택 가이드 (v2.2 공식화)
+
+| 스코프 | 위치 | 언제 |
+|---|---|---|
+| `project` (권장 기본) | `.claude/agent-memory/<name>/` | 프로젝트 특화 지식. VCS 공유 가능 |
+| `user` | `~/.claude/agent-memory/<name>/` | 모든 프로젝트 공통 |
+| `local` | `.claude/agent-memory-local/<name>/` | 프로젝트 특화지만 VCS 제외 (개인 노트) |
+
+**동작**:
+- subagent 프롬프트에 `MEMORY.md`의 처음 200줄 또는 25KB (작은 쪽) 자동 주입
+- Read·Write·Edit 툴 자동 활성화 (memory 관리용)
+- 초과분 정리는 subagent 자신이 수행
+
+## `initialPrompt` — Main Session Agent 패턴 (v2.2 신규)
+
+`claude --agent <name>` 또는 `settings.json`의 `"agent": "<name>"` 로 **메인 세션 전체**를 subagent 프롬프트로 띄울 때만 동작. 첫 유저 턴으로 자동 제출됨. commands·skills도 해석됨.
+
+```yaml
+---
+name: daily-standup
+description: 어제 커밋 요약 + 오늘 할 일 제안
+initialPrompt: "/git-log-yesterday 후 오늘 작업 계획 3가지를 추천"
+---
+```
+
+```bash
+claude --agent daily-standup
+# → 세션 시작 즉시 initialPrompt가 첫 유저 메시지로 자동 제출
+```
+
+**⚠️ frontmatter `hooks:`는 이 모드에서 fire 안 됨** (공식 주의). Agent 툴이나 @-mention으로 spawn 될 때만 fire.
+
 ### description 필드가 가장 중요
 
 Claude는 description만 보고 자동 호출 여부를 판단한다. 모호하면 호출 안 됨.
