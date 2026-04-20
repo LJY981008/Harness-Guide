@@ -1,0 +1,2 @@
+# Playwright MCP 임시 아티팩트 (browser_snapshot 출력 등)
+.playwright-mcp/
