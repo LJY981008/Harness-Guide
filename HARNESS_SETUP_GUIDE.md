@@ -1,4 +1,4 @@
-# Harness Setup Guide (2026-04 기준, v2.2.1)
+# Harness Setup Guide (2026-04 기준, v2.2.2)
 
 > 새 프로젝트에 Claude Code 하네스 엔지니어링을 도입하는 완전 가이드. 2026 공식 포맷(code.claude.com/docs) 기준.
 >
@@ -7,6 +7,13 @@
 > **v2 변경점** (2026-04-15): Phase F(정적분석) · Phase G(자동 루프) · Phase H(주간 GC) 추가. Phase A Hook 3종 → 5종으로 확장. `permissions.deny` 버그와 Agent `paths` 미지원 등 **실측으로 확인된 공식 제약** 명시.
 >
 > **v2.1 변경점** (2026-04-16): 대형 모노레포(60+ 모듈) 대응 Phase I 추가. 2025 후반~2026초 신규 기능 반영 — `.claude/rules/` + `paths:` frontmatter, nested `.claude/skills/` 자동 발견, `claudeMdExcludes`, `InstructionsLoaded` 훅, `CLAUDE_CODE_NEW_INIT=1` 인터랙티브 /init. 하네스 4계층 → **5계층** (rules 레이어 추가).
+>
+> **v2.2.2 변경점** (2026-04-20): 공식 문서 및 GitHub 이슈 재검증 반영.
+> - **신규 반영**: `/hooks` 메뉴 (읽기 전용 훅 브라우저, 출처 라벨 표시) — "적용 후 검증" 섹션에 추가
+> - **신규 반영**: `CLAUDE_ENV_FILE` 환경변수 영속화 (SessionStart/CwdChanged/FileChanged 전용) — `guide/phase-a-hooks.md` A-6-6 신설
+> - **이슈 상태 재확인**: #21858 (user-level `paths:` 무시)이 **2026-03-24 completed 종료** → 제약 표에서 "영구 버그" 표기 제거
+> - **이슈 상태 재확인**: #23478 (Write에 `paths:` 미적용)이 **closed as not planned** → "영구 제약으로 확정" 명시
+> - **이슈 상태 재확인**: #6699(2025-09-02 completed 종료) → #27040(2026-02-20 오픈)에서 재발. 제약 표 출처를 #27040 단독 + #6699는 선행/재발 주석으로 정리
 >
 > **v2.2.1 변경점** (2026-04-17, 후속): 대형 Phase 독립 파일 분할 — **루트 가이드 1,847줄 → 약 561줄**.
 > - `guide/phase-a-hooks.md` (Hook 5종 + 이벤트 레퍼런스, ~326줄)
@@ -39,11 +46,11 @@
 
 | 제약 | 현상 | 우회 방법 |
 |---|---|---|
-| **`permissions.deny` 필드 버그** (GitHub [#6699](https://github.com/anthropics/claude-code/issues/6699), [#27040](https://github.com/anthropics/claude-code/issues/27040)) | v1.0.93+ 에서 `deny` 규칙 무시됨 — 차단되어야 할 명령이 실행됨 | **PreToolUse hook + `exit 2`**가 유일한 실제 차단 수단 (Phase A-0 참고) |
+| **`permissions.deny` 필드 버그** (GitHub [#27040](https://github.com/anthropics/claude-code/issues/27040) OPEN. 선행 [#6699](https://github.com/anthropics/claude-code/issues/6699)는 2025-09-02 completed 종료됐으나 #27040(2026-02-20 오픈)에서 재발 확인) | `deny` 규칙 무시됨 — 차단되어야 할 명령이 실행됨 | **PreToolUse hook + `exit 2`**가 유일한 실제 차단 수단 (Phase A-0 참고) |
 | **Agent frontmatter `paths` 공식 미지원** | Skill은 `paths` glob으로 자동 로드되나 Agent는 `description` 매칭만 지원 | `recommend-agent-on-stop.sh`로 경로 키워드 기반 추천 주입 (Phase G) |
 | **PostToolUse/Stop `decision:block`은 피드백만** | 차단이 아닌 "Claude에게 메시지 주입" 수준. LLM이 무시 가능 | 진짜 물리적 강제는 **PreToolUse + exit 2**, CI 파이프라인, Checkstyle `ignoreFailures=false`만 가능 |
 | **모노레포 계층 설정 지원 불완전** (GitHub [#12962](https://github.com/anthropics/claude-code/issues/12962) OPEN, [#37344](https://github.com/anthropics/claude-code/issues/37344) 2026-03-25 중복 종료) | 계층 자동 발견 지원 여부가 요소별 상이. `settings.json`/hooks/MCP는 **루트만**, `CLAUDE.md`/`skills`/`rules`는 **양방향 계층 지원**, subagents는 **CWD 기준 walking up만** | Phase I 참고 — hooks는 루트 몰빵 + 경로 분기 스크립트, skills·rules는 모듈 폴더 분산, subagents는 루트 등록 원칙 (모듈 단위 cd 워크플로우일 때만 모듈 `.claude/agents/` 발견) |
-| **`paths:` frontmatter 부분 버그** (GitHub [#23478](https://github.com/anthropics/claude-code/issues/23478), [#21858](https://github.com/anthropics/claude-code/issues/21858)) | `.claude/rules/`의 `paths:` 매칭이 **Read 툴에만 트리거, Write에는 안 됨**. user-level(`~/.claude/rules/`)은 아예 `paths:` 무시 | 중요한 모듈 규칙은 Write 경로도 커버되도록 CLAUDE.md 계층 로드 병행, user-level은 `paths` 없는 전역 규칙으로만 사용 |
+| **`paths:` frontmatter Write 미지원** (GitHub [#23478](https://github.com/anthropics/claude-code/issues/23478) **closed as not planned** — Anthropic이 공식적으로 수정 계획 없음 → 영구 제약으로 확정) | `.claude/rules/`의 `paths:` 매칭이 **Read 툴에만 트리거, Write에는 안 됨**. (참고: user-level `~/.claude/rules/` `paths:` 무시 버그 [#21858](https://github.com/anthropics/claude-code/issues/21858)은 2026-03-24 completed 종료) | 중요한 모듈 규칙은 Write 경로도 커버되도록 CLAUDE.md 계층 로드 병행 |
 | **Subagent 공식 발견 위치 5곳만 유효** | managed settings / `--agents` CLI / `.claude/agents/` (루트 또는 CWD 상위) / `~/.claude/agents/` / plugin `agents/`. **스킬 폴더 내부 `.md`는 subagent로 인식 안 됨** | 스킬 폴더 안 `.md`는 "프롬프트 파일"로만 사용 가능. frontmatter `hooks:` 등을 정규 동작시키려면 **루트 `.claude/agents/`에 등록 필수** |
 | **`allow` 패턴이 `deny`를 덮어쓰는 버그** (GitHub [#45511](https://github.com/anthropics/claude-code/issues/45511), 2026-04-09) | `Bash(git *)` allow + `Bash(git commit *)` deny 공존 시 deny 무시, `git commit`이 자동 허용됨 (duplicate로 종료됐으나 현상 확인됨) | **allow 패턴을 최대한 좁게** (`Bash(git status:*)` 등 세분화), 또는 **pre-bash-guard로 직접 차단** (PreToolUse + exit 2) |
 | **Edit/Write가 `permissions.ask` 우회 버그** (GitHub [#22055](https://github.com/anthropics/claude-code/issues/22055)) | [#11226](https://github.com/anthropics/claude-code/issues/11226)의 regression. Edit/Write 툴이 ask 규칙을 건너뛰고 실행 | 사용자 승인이 필수인 경로는 `PreToolUse(Edit|Write)` 훅으로 물리 차단, **ask만 의존 금지** |
@@ -494,6 +501,11 @@ LINES=$(git diff --stat HEAD | tail -1 | grep -oE '[0-9]+ insertion' | grep -oE 
 # 1. Hook 등록 확인
 jq '.hooks | keys' .claude/settings.json
 # → ["PostToolUse","PreToolUse","Stop"]
+#
+# 또는 Claude Code 세션 내에서 `/hooks` 입력 (v2.2 공식):
+#   - 이벤트별 등록 훅 수 + 핸들러 타입([command]/[prompt]/[agent]/[http]) + 출처 표시
+#   - 출처 라벨: User / Project / Local / Plugin / Session / Built-in
+#   - jq 방식보다 계층 디버깅(어느 settings 파일에서 로드됐는지)에 유리
 
 # 2. Hook 실행권한
 ls -l .claude/hooks/*.sh

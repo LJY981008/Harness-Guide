@@ -324,3 +324,22 @@ SDK 클라이언트에 아래와 같이 전달됨:
 ```
 
 **활용**: 한 번 승인한 명령을 **자동으로 `settings.local.json`에 영구 저장** → [Phase D "permissions 위생"](../HARNESS_SETUP_GUIDE.md#phase-d-permissions-위생) 자동화.
+
+#### A-6-6. `CLAUDE_ENV_FILE` 환경변수 영속화 (v2.2 공식)
+
+`SessionStart` / `CwdChanged` / `FileChanged` 훅에서만 사용 가능한 환경변수 파일 경로. 훅이 `KEY=value` 형식으로 이 파일에 쓰면, 이후 **같은 세션의 모든 Bash 호출**에서 해당 변수가 주입된다.
+
+```bash
+#!/bin/bash
+# .claude/hooks/init-archetype-env.sh (SessionStart hook)
+ARCHETYPE=$(bash "$CLAUDE_PROJECT_DIR/.claude/hooks/lib/detect-archetype.sh" "$PWD")
+echo "CLAUDE_ARCHETYPE=$ARCHETYPE" >> "$CLAUDE_ENV_FILE"
+echo "CLAUDE_MODULE_ROOT=$(git rev-parse --show-toplevel)" >> "$CLAUDE_ENV_FILE"
+```
+
+**주 용도**:
+- 아키타입·모듈 루트 캐싱 — 매 훅 호출마다 `detect-archetype.sh` 재실행 회피 ([Phase I-5](phase-i-monorepo.md) 효율화)
+- 세션 시작 시 프로젝트별 경로(PATH / LD_LIBRARY_PATH 등) 주입
+- CWD 변경 시 모듈별 환경 재계산
+
+**제약**: PreToolUse/PostToolUse/Stop 등 **다른 훅 타입에서는 `$CLAUDE_ENV_FILE` 미할당**. 이 훅들에서 환경변수를 쓰려면 `.state/` 디렉터리에 수동 export하고 훅 내부에서 source하는 기존 방식 유지.
