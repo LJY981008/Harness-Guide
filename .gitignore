@@ -1,2 +1,5 @@
 # Playwright MCP 임시 아티팩트 (browser_snapshot 출력 등)
 .playwright-mcp/
+
+# Harness Audit 리포트 누적 디렉터리 (/harness-agent 출력)
+.analyze/
